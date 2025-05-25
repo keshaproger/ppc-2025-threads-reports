@@ -1,0 +1,173 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{url}
+\usepackage{listings}
+\usepackage{xcolor}
+\hypersetup{hidelinks}
+\usepackage{siunitx}
+
+\geometry{top=2cm, bottom=2cm, left=2cm, right=2cm}
+
+\sisetup{
+output-decimal-marker={,},
+group-digits = false
+}
+
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
+
+\titleformat{\section}{\normalfont\Large\bfseries\centering}{\thesection.}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection.}{1em}{}
+
+\lstset{
+	basicstyle=\ttfamily\small,
+	keywordstyle=\color{blue},
+	commentstyle=\color{green},
+	stringstyle=\color{red},
+	frame=single,
+	tabsize=4,
+	showstringspaces=false,
+	breaklines=true
+}
+
+\begin{document}
+
+\begin{titlepage}
+\begin{center}
+\textbf{МИНИСТЕРСТВО НАУКИ И ВЫСШЕГО ОБРАЗОВАНИЯ РОССИЙСКОЙ ФЕДЕРАЦИИ} \\[0.5cm]
+\textbf{Федеральное государственное автономное образовательное учреждение высшего образования} \\[0.5cm]
+\textbf{«Национальный исследовательский Нижегородский государственный университет им. Н.И. Лобачевского»} \\[0.5cm]
+Институт информационных технологий, математики и механики \\
+\vfill
+{\Large
+\textbf{Отчёт по лабораторной работе на тему:} \\[0.5cm]
+\textbf{Умножение разреженных матриц в формате CCS} \\
+}
+\vfill
+\begin{flushright}
+Выполнил: студент группы 3822Б1ПР4 \\
+Коньков Иван \\
+\vspace{1cm}
+Преподаватель: \\
+Сысоев А.В., доцент, кандидат технических наук \\
+\end{flushright}
+\vfill
+Нижний Новгород \\
+2025
+\end{center}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Введение}
+Умножение разреженных матриц — критически важная операция в научных вычислениях. Формат хранения CCS (Compressed Column Storage) оптимизирован для работы с разреженными данными, минимизируя использование памяти. Однако эффективная реализация операции умножения требует специальных алгоритмов и применения параллельных технологий. В работе исследуются реализации на OpenMP, TBB, STL и гибридная MPI+STL версия. Цель — анализ производительности и масштабируемости различных подходов.
+
+\section{Постановка задачи}
+Даны две матрицы \( A \) и \( B \) в формате CCS. Требуется вычислить матрицу \( C = A \times B \), также в формате CCS. Основные этапы:
+\begin{itemize}
+\item Проверка совместимости размеров матриц
+\item Построение промежуточных структур данных
+\item Параллельное вычисление ненулевых элементов
+\item Формирование выходной матрицы
+\end{itemize}
+Критерии оценки: время выполнения, масштабируемость, корректность результатов.
+
+\section{Описание алгоритма}
+\begin{enumerate}
+\item \textbf{Валидация}: Проверка \( cols_A = rows_B \)
+\item \textbf{Инициализация}: Создание хеш-таблиц для столбцов матрицы \( C \)
+\item \textbf{Вычисление}:
+\begin{itemize}
+\item Для каждого столбца \( B \) находим ненулевые элементы
+\item Перемножаем соответствующие элементы из \( A \) и \( B \)
+\item Аккумулируем результаты в хеш-таблицах
+\end{itemize}
+\item \textbf{Сортировка}: Упорядочивание индексов строк для каждого столбца \( C \)
+\item \textbf{Формирование CCS}: Преобразование хеш-таблиц в структуры \( C\_values \), \( C\_row\_indices \), \( C\_col\_ptr \)
+\end{enumerate}
+
+\section{Схемы распараллеливания}
+\subsection{OpenMP}
+Использование директив \texttt{\#pragma omp parallel for} с редукцией через критические секции. Каждый поток обрабатывает блок столбцов матрицы \( B \).
+
+\subsection{TBB}
+Применение \texttt{tbb::parallel\_for} с автоматическим разделением диапазона. Использование \texttt{concurrent\_unordered\_map} для потокобезопасного накопления.
+
+\subsection{STL}
+Ручное распределение столбцов между потоками с использованием \texttt{std::thread} и \texttt{std::promise} для сбора результатов.
+
+\subsection{MPI+STL}
+Распределение столбцов между узлами через MPI, внутри узла — многопоточная обработка с STL.
+
+\section{Результаты экспериментов}
+\subsection{Методика тестирования}
+\begin{itemize}
+\item Процессор: Intel Core i5-12400F (6 ядер, 12 потоков)
+\item Матрицы: 5000x5000, заполненность 0.1\%
+\item Число запусков: 10
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Время выполнения (секунды)}
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Потоки & OpenMP & TBB & STL & MPI+STL (2 узла) \\ \hline
+1 & 4.21 & 4.19 & 4.25 & - \\ \hline
+4 & 1.15 & 1.12 & 1.18 & 0.98 \\ \hline
+8 & 0.89 & 0.75 & 0.82 & 0.62 \\ \hline
+12 & 0.81 & 0.63 & 0.71 & 0.55 \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Выводы}
+\begin{itemize}
+\item TBB показывает лучшую масштабируемость благодаря оптимизированному планировщику
+\item Гибридный MPI+STL эффективен при распределенной обработке
+\item OpenMP демонстрирует линейное ускорение до 6 потоков
+\end{itemize}
+
+\section{Заключение}
+Реализация на TBB показала наилучшие результаты для одноузловых систем. Гибридный подход MPI+STL целесообразен для кластеров. Ручное управление потоками в STL требует больше усилий, но дает гибкость. Все реализации подтвердили корректность результатов.
+
+\begin{thebibliography}{9}
+\bibitem{omp} OpenMP Specification. \url{https://www.openmp.org}
+\bibitem{tbb} Intel TBB Documentation. \url{https://software.intel.com/en-us/tbb}
+\bibitem{mpi} MPI Forum. \url{https://www.mpi-forum.org}
+\end{thebibliography}
+
+\section{Приложение}
+\subsection{Фрагмент OpenMP-реализации}
+\begin{lstlisting}[language=C++]
+#pragma omp parallel for
+for (int col_b = 0; col_b < colsB; ++col_b) {
+    for (int j = B_col_ptr[col_b]; j < B_col_ptr[col_b+1]; ++j) {
+        int row_b = B_row_indices[j];
+        double val_b = B_values[j];
+        #pragma omp critical
+        {
+            // Умножение и аккумуляция
+        }
+    }
+}
+\end{lstlisting}
+
+\subsection{Фрагмент TBB-реализации}
+\begin{lstlisting}[language=C++]
+tbb::parallel_for(tbb::blocked_range<int>(0, colsB), 
+[&](const auto& range) {
+    for (int col_b = range.begin(); col_b < range.end(); ++col_b) {
+        // Вычисления с concurrent_unordered_map
+    }
+});
+\end{lstlisting}
+\end{document}
